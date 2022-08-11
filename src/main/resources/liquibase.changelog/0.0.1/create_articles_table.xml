@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                                       http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.4.xsd">
+
+    <include file="../properties.xml" relativeToChangelogFile="true"/>
+
+    <changeSet id="create_articles_table" author="patokov_nikita">
+        <createTable tableName="articles">
+            <column name="id" type="${uuid.type}"/>
+            <column name="title" type="${text.type}"/>
+            <column name="create_time" type="${timestamp_with_time_zone.type}"/>
+            <column name="timestamp" type="${timestamp_with_time_zone.type}"/>
+            <column name="language" type="${16_length_text.type}"/>
+            <column name="wiki" type="${64_length_text.type}"/>
+        </createTable>
+        <addPrimaryKey constraintName="article_pk" tableName="articles" columnNames="id"/>
+        <addNotNullConstraint constraintName="article_create_time_nn" tableName="articles" columnName="create_time"/>
+        <addNotNullConstraint constraintName="article_timestamp_nn" tableName="articles" columnName="timestamp"/>
+    </changeSet>
+
+    <changeSet id="create_category_catalog" author="patokov_nikita">
+        <createTable tableName="category_catalog">
+            <column name="id" type="${uuid.type}"/>
+            <column name="category" type="${text.type}"/>
+        </createTable>
+        <addPrimaryKey constraintName="category_pk" tableName="category_catalog" columnNames="id"/>
+
+    </changeSet>
+
+    <changeSet id="create_full_info" author="patokov_nikita">
+        <createTable tableName="full_info_table">
+            <column name="id" type="${serial.type}"/>
+            <column name="article_id" type="${uuid.type}"/>
+            <column name="category_id" type="${uuid.type}"/>
+        </createTable>
+        <addPrimaryKey constraintName="full_info_table_pk" tableName="full_info_table" columnNames="id"/>
+        <addForeignKeyConstraint constraintName="article_fk"  baseColumnNames="article_id"
+                                 baseTableName="full_info_table" referencedColumnNames="id"
+                                 referencedTableName="articles"/>
+        <addForeignKeyConstraint constraintName="category_fk"  baseColumnNames="category_id"
+                                 baseTableName="full_info_table" referencedColumnNames="id"
+                                 referencedTableName="category_catalog"/>
+    </changeSet>
+
+    <changeSet id="create_auxiliary_text_table" author="patokov_nikita">
+        <createTable tableName="auxiliary_text_table">
+            <column name="id" type="${serial.type}"/>
+            <column name="article_id" type="${uuid.type}"/>
+            <column name="text" type="${text.type}"/>
+        </createTable>
+        <addPrimaryKey constraintName="auxiliary_text_pk" tableName="auxiliary_text_table" columnNames="id"/>
+        <addForeignKeyConstraint constraintName="aux_text_fk"  baseColumnNames="article_id"
+                                 baseTableName="auxiliary_text_table" referencedColumnNames="id"
+                                 referencedTableName="articles"/>
+
+    </changeSet>
+
+</databaseChangeLog>
