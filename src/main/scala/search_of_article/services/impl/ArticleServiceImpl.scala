@@ -4,6 +4,7 @@ import cats.implicits._
 import cats.effect._
 import io.circe.{DecodingFailure, Json}
 import io.circe.parser.parse
+import search_of_article.api.enpoints.NotFound
 import search_of_article.model._
 import search_of_article.repo.ArticleRepo
 import search_of_article.services.ArticleService
@@ -116,8 +117,8 @@ class ArticleServiceImpl(repo: ArticleRepo)(implicit ec: ExecutionContext) exten
       _ <- validateList
       listFullArticleIO = listPartArticle.map { partArticle =>
         for {
-          auxText <- repo.getAuxiliaryText(partArticle.id)
-          optAuxText = if (auxText.isEmpty) None else Some(auxText)
+          listOfOpt <- repo.getAuxiliaryText(partArticle.id)
+          optAuxText = convertListOption(listOfOpt)
           listOfCategoryId <- repo.getCategoryIdByArticleId(partArticle.id)
           categoryListIO = listOfCategoryId.map(id => repo.getCategoryById(id)).sequence
           categoryList <- categoryListIO
@@ -143,8 +144,8 @@ class ArticleServiceImpl(repo: ArticleRepo)(implicit ec: ExecutionContext) exten
       _ <- validateList
       listFullArticleIO = listPartArticle.map { article =>
         for {
-          auxText <- optAuxiliaryText.fold(repo.getAuxiliaryText(article.id))(elem => IO.pure(elem))
-          optAuxText = if (auxText.isEmpty) None else Some(auxText)
+          auxText <- optAuxiliaryText
+            .fold(repo.getAuxiliaryText(article.id).map(convertListOption))(elem => IO.pure(Some(elem)))
           updatedCategoryList <- updateCategoryList(article.id, optCategoryList)
           fullArticle = FullArticle(
             id = article.id,
@@ -153,7 +154,7 @@ class ArticleServiceImpl(repo: ArticleRepo)(implicit ec: ExecutionContext) exten
             timestamp = Instant.now(),
             language = article.language,
             wiki = article.wiki,
-            auxiliaryText = optAuxText,
+            auxiliaryText = auxText,
             categories = updatedCategoryList
           )
           _ <- repo.updateArticle(fullArticle)
@@ -195,16 +196,25 @@ class ArticleServiceImpl(repo: ArticleRepo)(implicit ec: ExecutionContext) exten
     }
   }
 
+  private def convertListOption(list: List[Option[String]]): Option[List[String]] =
+    list match {
+      case Nil => Some(Nil)
+      case h :: t =>
+        val restOfList = convertListOption(t)
+        if (h.isEmpty || restOfList.isEmpty) None else Some(h.get :: restOfList.get)
+    }
+
+
   private def articleNotFound(title: String): IO[List[PartitionArticle]] = {
-    IO.raiseError[List[PartitionArticle]](new RuntimeException(s"Article with title - $title not found"))
+    IO.raiseError[List[PartitionArticle]](NotFound(s"\"$title\" not found!"))
   }
 
   private def categoryNotFound(categoryName: String): IO[Category] = {
-    IO.raiseError[Category](new RuntimeException(s"Categories with name $categoryName not found"))
+    IO.raiseError[Category](new IllegalArgumentException(s"Categories with name $categoryName not found"))
   }
 
   private def categoryFormingError(exceptionMessage: String): Future[Category] = {
-    Future.failed(new RuntimeException(s"Error at the moment of forming category catalog"))
+    Future.failed(new IllegalArgumentException(s"Error at the moment of forming category catalog"))
   }
 
   // additional implementation - this method search the number of articles for the only one concrete category

@@ -6,4 +6,4 @@ final case class DbConfig(driver: String, url: String, user: String, password: S
 
 final case class LiquibaseConfig(changelogPath: String)
 
-final case class DataDampConfig(path: String)
+final case class DataDampConfig(path: String, readable: Boolean)

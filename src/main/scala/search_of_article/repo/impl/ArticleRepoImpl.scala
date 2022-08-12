@@ -17,9 +17,9 @@ class ArticleRepoImpl(transactor: Transactor[IO])(implicit runtime: IORuntime) e
       .update.run.map(_ => ())
   }
 
-  override def getAuxiliaryText(articleId: String): IO[List[String]] = toIO {
+  override def getAuxiliaryText(articleId: String): IO[List[Option[String]]] = toIO {
     sql"select text from auxiliary_text_table where article_id = $articleId"
-      .query[String]
+      .query[Option[String]]
       .to[List]
   }
 

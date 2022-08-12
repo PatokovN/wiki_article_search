@@ -10,46 +10,46 @@ import sttp.tapir.swagger.bundle.SwaggerInterpreter
 import search_of_article.services.ArticleService
 import ArticleView._
 import io.circe.syntax.EncoderOps
-import search_of_article.api.enpoints.ArticleEndpoints
-
+import search_of_article.api.enpoints.{ArticleEndpoints, ServerError, UserError}
 
 class ArticleApi(articleService: ArticleService) {
 
   val findArticleRoute: HttpRoutes[IO] =
     Http4sServerInterpreter[IO]()
       .toRoutes(ArticleEndpoints.findArticle
-        .serverLogicSuccess(title => articleService.find(title._1)
+        .serverLogic(title => articleService.find(title._1)
           .map(data => {
             val viewList = data.map(ArticleView.fromFullArticle)
             convertIntoStringOfFormat(viewList, title._2)
-          })
+          }).map(_.asRight[Either[ServerError, UserError]])
         )
       )
 
   val counterByCategoryRoute: HttpRoutes[IO] =
     Http4sServerInterpreter[IO]()
       .toRoutes(ArticleEndpoints.counterByCategory
-        .serverLogicSuccess(categoryName =>
-          articleService.counterByCategory(categoryName.getOrElse("")).map(_.toString))
+        .serverLogic(categoryName =>
+          articleService.counterByCategory(categoryName.getOrElse(""))
+            .map(_.toString).map(_.asRight[Either[ServerError, UserError]]))
       )
 
   val categoryStatisticRoute: HttpRoutes[IO] =
     Http4sServerInterpreter[IO]()
       .toRoutes(ArticleEndpoints.categoryStatistic
-        .serverLogicSuccess(_ =>
-          articleService.statisticByCategories))
+        .serverLogic(_ => articleService.statisticByCategories.map(_.asRight[Either[ServerError, UserError]])))
 
   val updateArticleRoute: HttpRoutes[IO] =
     Http4sServerInterpreter[IO]()
       .toRoutes(ArticleEndpoints.updateArticle
-        .serverLogicSuccess(request => {
+        .serverLogic(request => {
           val title = request._1
           val optCategoryList = request._3.map(_.split(",").toList)
           val optAuxiliaryText = request._4.map(_.split("\\.").toList)
           articleService
             .update(title, request._2, optCategoryList, optAuxiliaryText)
             .map(list => list.map(ArticleView.fromFullArticle))
-        }))
+        }.map(_.asRight[Either[ServerError, UserError]]))
+      )
 
   val swaggerUIRoutes: HttpRoutes[IO] = Http4sServerInterpreter[IO]().toRoutes(
     SwaggerInterpreter().fromEndpoints[IO](ArticleEndpoints.listOfEndpoints,

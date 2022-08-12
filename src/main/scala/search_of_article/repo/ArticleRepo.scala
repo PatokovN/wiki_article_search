@@ -16,7 +16,7 @@ trait ArticleRepo {
 
   def insertCategory(category: Category): IO[Unit]
 
-  def getAuxiliaryText(articleId: String): IO[List[String]]
+  def getAuxiliaryText(articleId: String): IO[List[Option[String]]]
 
   def getArticle(title: String): IO[List[PartitionArticle]]
 
