@@ -4,13 +4,14 @@ import cats.implicits._
 import cats.effect._
 import io.circe.{DecodingFailure, Json}
 import io.circe.parser.parse
-import search_of_article.model.{Category, CategoryStatistic, FullArticle, PartitionArticle}
+import search_of_article.model._
 import search_of_article.repo.ArticleRepo
 import search_of_article.services.ArticleService
 
 import java.time.Instant
 import java.util.UUID
-import scala.concurrent.ExecutionContext
+import scala.annotation.tailrec
+import scala.concurrent.{ExecutionContext, Future}
 import scala.io.Source
 import scala.util.{Failure, Success, Try}
 
@@ -30,29 +31,62 @@ class ArticleServiceImpl(repo: ArticleRepo)(implicit ec: ExecutionContext) exten
       )
     } match {
       case Failure(exception) => IO.raiseError(exception)
-      case Success(listOfData) => insertTransaction(listOfData)
+      case Success(listOfData) => insertTransaction2(listOfData)
     }
 
-  private def insertTransaction(list: List[Either[Throwable, FullArticle]]): IO[Unit] =
-    list.map {
-      case Left(_) => IO.unit
-      case Right(article) =>
-        val validatedCategories: IO[List[Category]] = article.categories.map { category =>
-          for {
-            optCategory <- repo.getCategoryByName(category.name)
-            _ <- optCategory.fold(repo.insertCategory(category))(_ => IO.unit)
-          } yield optCategory.getOrElse(category)
-        }.sequence
+  private def insertTransaction2(list: List[Either[Throwable, FullArticle]]): IO[Unit] = {
+    val invalidArtListIO: IO[List[FullArticle]] = list.map(IO.fromEither).sequence
+    for {
+      invalidArtList <- invalidArtListIO
+      validDataListIO = formingCategoryCatalog(invalidArtList)
+      validDataList <- validDataListIO
+      partialArticle = validDataList.map(_.part).distinct
+      categories = validDataList.map(_.category).distinct
+      auxTextAll = auxTextRelate(validDataList).distinct
+      fullDataRelate = validDataList.map(dataLine => RelationArticleCategory(dataLine.part.id, dataLine.category.id))
+      _ <- repo.insertArticle(partialArticle)
+      _ <- repo.insertCategoryList(categories)
+      _ <- repo.insertAuxText(auxTextAll)
+      unit <- repo.insertFullTable(fullDataRelate)
+    } yield unit
 
-        for {
-          newCategories <- validatedCategories
-          newArticle = article.copy(categories = newCategories)
-          _ <- repo.insertArticle(newArticle)
-          _ <- repo.insertAuxiliaryText(article.id, article.auxiliaryText)
-          result <- repo.insertFullInfo(newArticle)
-        } yield result
-    }.sequence_
+  }
 
+  private def auxTextRelate(listData: List[DataLine]): List[AuxTextLine] = {
+    listData.flatMap(dataLine => {
+      dataLine.text match {
+        case Some(textLines) => textLines.map(text => AuxTextLine(dataLine.part.id, Some(text)))
+        case None => List(AuxTextLine(dataLine.part.id, None))
+      }
+    })
+  }
+
+  private def formingCategoryCatalog(listData: List[FullArticle]): IO[List[DataLine]] = {
+    val dataLinesInvalid = listData.flatMap(DataLine.fromFullArticle)
+
+    @tailrec
+    def innerFormCategoryCatalog(listDataLines: List[DataLine],
+                                 accumForCategory: Map[String, Category],
+                                 validDatalines: List[DataLine]): List[DataLine] = {
+      listDataLines match {
+        case Nil => validDatalines
+        case h :: tail =>
+          if (accumForCategory.contains(h.category.name)) {
+            val validDataLine = DataLine(h.part, h.text, accumForCategory(h.category.name))
+            innerFormCategoryCatalog(tail, accumForCategory, validDataLine :: validDatalines)
+          }
+          else
+            innerFormCategoryCatalog(tail, accumForCategory + (h.category.name -> h.category), h :: validDatalines)
+      }
+    }
+
+    val validDataLines: Future[List[DataLine]] =
+      Future {
+        innerFormCategoryCatalog(dataLinesInvalid, Map.empty, List.empty)
+      }
+
+    IO.fromFuture(IO(validDataLines))
+  }
 
   private def customParserDataLine(value: Json): Either[DecodingFailure, FullArticle] = {
     val cursor = value.hcursor
@@ -167,6 +201,10 @@ class ArticleServiceImpl(repo: ArticleRepo)(implicit ec: ExecutionContext) exten
 
   private def categoryNotFound(categoryName: String): IO[Category] = {
     IO.raiseError[Category](new RuntimeException(s"Categories with name $categoryName not found"))
+  }
+
+  private def categoryFormingError(exceptionMessage: String): Future[Category] = {
+    Future.failed(new RuntimeException(s"Error at the moment of forming category catalog"))
   }
 
   // additional implementation - this method search the number of articles for the only one concrete category

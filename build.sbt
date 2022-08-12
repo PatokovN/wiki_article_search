@@ -10,6 +10,7 @@ val doobieVersion = "1.0.0-RC2"
 val liquibase = "4.9.0"
 val http4sVersion = "0.23.12"
 val tapirVersion = "1.0.3"
+val pureConfigVersion = "0.17.1"
 
 libraryDependencies ++= Seq(
   "io.circe" %% "circe-core" % circeVersion,
@@ -35,5 +36,6 @@ libraryDependencies ++= Seq(
   "com.softwaremill.sttp.tapir" %% "tapir-json-circe" % tapirVersion,
   "com.softwaremill.sttp.tapir" %% "tapir-swagger-ui-bundle" % tapirVersion,
 
-  "ch.qos.logback" % "logback-classic" % "1.1.3" % Runtime
+  "ch.qos.logback" % "logback-classic" % "1.1.3" % Runtime,
+  "com.github.pureconfig" %% "pureconfig" % pureConfigVersion
 )

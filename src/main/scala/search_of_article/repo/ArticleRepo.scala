@@ -1,18 +1,20 @@
 package search_of_article.repo
 
 import cats.effect.IO
-import search_of_article.model.{Category, CategoryStatistic, FullArticle, PartitionArticle}
+import search_of_article.model._
 
 
 trait ArticleRepo {
 
-  def insertArticle(article: FullArticle): IO[Unit]
+  def insertArticle(listPartArticle: List[PartitionArticle]): IO[Int]
+
+  def insertCategoryList(categories: List[Category]): IO[Int]
+
+  def insertAuxText(auxTextFullList: List[AuxTextLine]): IO[Int]
+
+  def insertFullTable(artCatRelateList: List[RelationArticleCategory]): IO[Int]
 
   def insertCategory(category: Category): IO[Unit]
-
-  def insertAuxiliaryText(articleId: String, auxiliaryText: Option[List[String]]): IO[Unit]
-
-  def insertFullInfo(article: FullArticle): IO[Unit]
 
   def getAuxiliaryText(articleId: String): IO[List[String]]
 

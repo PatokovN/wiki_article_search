@@ -13,18 +13,33 @@ case class FullArticle(id: String,
                         categories: List[Category]
                       )
 
-//case class AuxiliaryText(id: String, text: String)
-//
-//object AuxiliaryText {
-//  def fromOptList(optList: Option[List[String]]): Option[List[AuxiliaryText]] =
-//    optList.map(_.map(elem => AuxiliaryText(UUID.randomUUID().toString, elem)))
-//}
-
 case class Category(id: String, name: String)
+
+case class DataLine(part: PartitionArticle,text: Option[List[String]], category: Category)
+
+object DataLine {
+
+  def fromFullArticle(fullArticle: FullArticle): List[DataLine] =
+    for {
+      category <- fullArticle.categories
+    } yield DataLine(PartitionArticle.fromFullArticle(fullArticle), fullArticle.auxiliaryText, category)
+}
 
 case class PartitionArticle(id: String,
                             title: String,
                             createTime: Instant,
                             timestamp: Instant,
                             language: String,
-                            wiki: String)
+                            wiki: String
+                           )
+
+object PartitionArticle {
+
+  def fromFullArticle(fullArticle: FullArticle): PartitionArticle =
+    PartitionArticle(fullArticle.id, fullArticle.title, fullArticle.createTime, fullArticle.timestamp,
+      fullArticle.language, fullArticle.wiki)
+}
+
+case class AuxTextLine(articleId: String, text: Option[String])
+
+case class RelationArticleCategory(articleId: String, categoryId: String)

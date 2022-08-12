@@ -1,6 +1,6 @@
 package search_of_article.repo.impl
 
-import search_of_article.model.{Category, CategoryStatistic, FullArticle, PartitionArticle}
+import search_of_article.model.{AuxTextLine, Category, CategoryStatistic, FullArticle, PartitionArticle, RelationArticleCategory}
 import search_of_article.repo.ArticleRepo
 import cats.effect.IO
 import cats.effect.unsafe.IORuntime
@@ -8,46 +8,22 @@ import doobie.{ConnectionIO, Transactor}
 import doobie.implicits._
 import doobie.postgres.implicits._
 import doobie.util.fragment.Fragment
+import doobie.util.update.Update
 
 class ArticleRepoImpl(transactor: Transactor[IO])(implicit runtime: IORuntime) extends ArticleRepo {
 
-  override def insertArticle(article: FullArticle): IO[Unit] = unsafeRun {
-    sql"""insert into articles (id, title, create_time, timestamp, language, wiki)
-            values (${article.id}, ${article.title}, ${article.createTime},
-            ${article.timestamp}, ${article.language}, ${article.wiki})"""
-      .update.run.map(_ => ())
-  }
-
-  override def insertAuxiliaryText(articleId: String, auxiliaryText: Option[List[String]]): IO[Unit] = unsafeRun {
-    val insertText = auxiliaryText match {
-      case None => Fragment.empty
-      case Some(list) => list.map(text =>
-        sql"""insert into auxiliary_text_table (article_id, text)
-            values (${articleId}, $text);""").reduce(_ ++ _)
-    }
-
-    insertText.update.run.map(_ => ())
-  }
-
-  override def insertCategory(category: Category): IO[Unit] = unsafeRun {
+  override def insertCategory(category: Category): IO[Unit] = toIO {
     sql"""insert into category_catalog (id, category) values (${category.id}, ${category.name});"""
       .update.run.map(_ => ())
   }
 
-  override def insertFullInfo(article: FullArticle): IO[Unit] = unsafeRun {
-    article.categories.map(category =>
-      sql"""insert into full_info_table (article_id, category_id)
-           values (${article.id}, ${category.id});""").reduce((res, a) => res ++ a)
-      .update.run.map(_ => ())
-  }
-
-  override def getAuxiliaryText(articleId: String): IO[List[String]] = unsafeRun {
+  override def getAuxiliaryText(articleId: String): IO[List[String]] = toIO {
     sql"select text from auxiliary_text_table where article_id = $articleId"
       .query[String]
       .to[List]
   }
 
-  override def getCategoryStatistic: IO[List[CategoryStatistic]] = unsafeRun {
+  override def getCategoryStatistic: IO[List[CategoryStatistic]] = toIO {
     sql"""
     select category, count(article_id) from full_info_table fit
     right outer join category_catalog cc
@@ -57,19 +33,19 @@ class ArticleRepoImpl(transactor: Transactor[IO])(implicit runtime: IORuntime) e
     """.query[CategoryStatistic].to[List]
   }
 
-  override def getCategoryIdByArticleId(articleId: String): IO[List[String]] = unsafeRun {
+  override def getCategoryIdByArticleId(articleId: String): IO[List[String]] = toIO {
     sql"select category_id from full_info_table where article_id = $articleId"
       .query[String]
       .to[List]
   }
 
-  override def getCategoryById(categoryId: String): IO[Category] = unsafeRun {
+  override def getCategoryById(categoryId: String): IO[Category] = toIO {
     sql"select id, category from category_catalog where id = ${categoryId}"
       .query[Category]
       .unique
   }
 
-  override def getArticle(title: String): IO[List[PartitionArticle]] = unsafeRun {
+  override def getArticle(title: String): IO[List[PartitionArticle]] = toIO {
     sql"""select id, title, create_time, timestamp, language, wiki
            from articles where LOWER(title) = LOWER($title)"""
       .query[PartitionArticle]
@@ -77,7 +53,7 @@ class ArticleRepoImpl(transactor: Transactor[IO])(implicit runtime: IORuntime) e
   }
 
 
-  override def updateArticle(fullArticle: FullArticle): IO[Unit] = unsafeRun {
+  override def updateArticle(fullArticle: FullArticle): IO[Unit] = toIO {
 
     val deleteFullTableRelation =
       sql"""
@@ -124,16 +100,39 @@ class ArticleRepoImpl(transactor: Transactor[IO])(implicit runtime: IORuntime) e
       ).update.run.map(_ => ())
   }
 
-  private def unsafeRun[T](query: ConnectionIO[T]): IO[T] =
-    query.transact(transactor)
 
-  override def getNumberOfArticlesByCategory(categoryId: String): IO[Int] = unsafeRun {
+  override def getNumberOfArticlesByCategory(categoryId: String): IO[Int] = toIO {
     sql"select count (*) FROM full_info_table where category_id = $categoryId"
-      .query[Int]
-      .unique
+        .query[Int]
+        .unique
   }
 
-  override def getCategoryByName(categoryName: String): IO[Option[Category]] = unsafeRun {
+  override def getCategoryByName(categoryName: String): IO[Option[Category]] = toIO {
     sql"select id, category from category_catalog where category = $categoryName".query[Category].option
   }
+
+  override def insertArticle(listPartArticle: List[PartitionArticle]): IO[Int] = toIO {
+    val sql = "insert into articles (id, title, create_time, timestamp, language, wiki) values (?, ?, ?, ?, ?, ?)"
+    Update[PartitionArticle](sql).updateMany(listPartArticle)
+
+  }
+
+  override def insertCategoryList(categoryList: List[Category]): IO[Int] = toIO {
+    val sql = "insert into category_catalog (id, category) values (?, ?)"
+    Update[Category](sql).updateMany(categoryList)
+  }
+
+  override def insertAuxText(auxTextFullList: List[AuxTextLine]): IO[Int] = toIO {
+    val sql = "insert into auxiliary_text_table (article_id, text) values (?, ?)"
+    Update[AuxTextLine](sql).updateMany(auxTextFullList)
+  }
+
+  override def insertFullTable(artCatRelateList: List[RelationArticleCategory]): IO[Int] = toIO {
+    val sql = "insert into full_info_table (article_id, category_id) values (?, ?)"
+    Update[RelationArticleCategory](sql).updateMany(artCatRelateList)
+  }
+
+  private def toIO[T](query: ConnectionIO[T]): IO[T] =
+    query.transact(transactor)
+
 }

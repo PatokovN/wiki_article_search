@@ -17,7 +17,7 @@ class LiquibaseMigrator(connection: Connection) {
     Try {
       new Liquibase(changelogPath, new ClassLoaderResourceAccessor(), database).update(new Contexts())
     } match {
-      case f @ Failure(exception) =>
+      case f @ Failure(_) =>
         f
       case s @ Success(_) =>
         s
