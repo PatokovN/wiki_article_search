@@ -29,7 +29,7 @@ object ArticleApp extends IOApp {
       api = new ApiDI(serviceDI)
       _ <- repoDI.init.onError(e => IO.println(s"Failed to start an app due to exception $e"))
       _ <- if (config.dataDamp.readable)
-            serviceDI.articleService.fillTable(config.dataDamp.path)
+            serviceDI.articleService.parsingOfFile(config.dataDamp.path)
             else IO.unit
       _ <- BlazeServerBuilder[IO]
         .withExecutionContext(ec)

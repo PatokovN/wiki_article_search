@@ -16,14 +16,18 @@ object ArticleView {
   implicit val articleEncoder: Decoder[ArticleView] = deriveDecoder[ArticleView]
   implicit val articleDecoder: Encoder[ArticleView] = deriveEncoder[ArticleView]
 
-  def fromFullArticle(fullArticle: FullArticle): ArticleView =
+  def fromFullArticle(fullArticle: FullArticle): ArticleView = {
+    val auxTextView = fullArticle.auxiliaryText.map(_.flatMap(elem => if (elem.isEmpty) List.empty else List(elem)))
+    val categoryView = fullArticle.categories.flatMap(elem => if (elem.name.isEmpty) List.empty else List(elem.name))
+
     new ArticleView(fullArticle.title,
                     fullArticle.createTime.toEpochMilli,
                     fullArticle.timestamp.toEpochMilli,
                     fullArticle.language,
                     fullArticle.wiki,
-                    fullArticle.categories.map(_.name),
-                    fullArticle.auxiliaryText)
+                    categoryView,
+                    auxTextView)
+  }
 
 }
 

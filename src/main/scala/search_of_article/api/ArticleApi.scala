@@ -10,7 +10,8 @@ import sttp.tapir.swagger.bundle.SwaggerInterpreter
 import search_of_article.services.ArticleService
 import ArticleView._
 import io.circe.syntax.EncoderOps
-import search_of_article.api.enpoints.{ArticleEndpoints, ServerError, UserError}
+import search_of_article.api.enpoints._
+import search_of_article.model.CategoryStatistic
 
 class ArticleApi(articleService: ArticleService) {
 
@@ -21,8 +22,11 @@ class ArticleApi(articleService: ArticleService) {
           .map(data => {
             val viewList = data.map(ArticleView.fromFullArticle)
             convertIntoStringOfFormat(viewList, title._2)
-          }).map(_.asRight[Either[ServerError, UserError]])
-        )
+          }).attempt.map[Either[CustomError,String]]{
+          case Left(notFound:IllegalArgumentException) => NotFound(notFound.getMessage).asLeft[String]
+          case Left(error: Throwable) => ServerError(error.getMessage).asLeft[String]
+          case Right(value) => value.asRight[CustomError]
+        })
       )
 
   val counterByCategoryRoute: HttpRoutes[IO] =
@@ -30,13 +34,21 @@ class ArticleApi(articleService: ArticleService) {
       .toRoutes(ArticleEndpoints.counterByCategory
         .serverLogic(categoryName =>
           articleService.counterByCategory(categoryName.getOrElse(""))
-            .map(_.toString).map(_.asRight[Either[ServerError, UserError]]))
+            .map(_.toString).attempt.map[Either[CustomError,String]]{
+            case Left(notFound:IllegalArgumentException) => NotFound(notFound.getMessage).asLeft[String]
+            case Left(error: Throwable) => ServerError(error.getMessage).asLeft[String]
+            case Right(value) => value.asRight[CustomError]
+          })
       )
 
   val categoryStatisticRoute: HttpRoutes[IO] =
     Http4sServerInterpreter[IO]()
       .toRoutes(ArticleEndpoints.categoryStatistic
-        .serverLogic(_ => articleService.statisticByCategories.map(_.asRight[Either[ServerError, UserError]])))
+        .serverLogic(_ => articleService.statisticByCategories.attempt
+          .map[Either[CustomError,List[CategoryStatistic]]]{
+          case Left(error: Throwable) => ServerError(error.getMessage).asLeft[List[CategoryStatistic]]
+          case Right(value) => value.asRight[CustomError]
+        }))
 
   val updateArticleRoute: HttpRoutes[IO] =
     Http4sServerInterpreter[IO]()
@@ -48,7 +60,11 @@ class ArticleApi(articleService: ArticleService) {
           articleService
             .update(title, request._2, optCategoryList, optAuxiliaryText)
             .map(list => list.map(ArticleView.fromFullArticle))
-        }.map(_.asRight[Either[ServerError, UserError]]))
+        }.attempt.map[Either[CustomError,List[ArticleView]]]{
+          case Left(notFound:IllegalArgumentException) => NotFound(notFound.getMessage).asLeft[List[ArticleView]]
+          case Left(error: Throwable) => ServerError(error.getMessage).asLeft[List[ArticleView]]
+          case Right(value) => value.asRight[CustomError]
+        })
       )
 
   val swaggerUIRoutes: HttpRoutes[IO] = Http4sServerInterpreter[IO]().toRoutes(

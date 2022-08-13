@@ -4,13 +4,12 @@ import cats.effect.IO
 import cats.effect.unsafe.IORuntime
 import com.zaxxer.hikari.HikariDataSource
 import doobie.util.transactor.Transactor
-import search_of_article.config.{ArticleServiceConfig, DbConfig}
+import search_of_article.config.ArticleServiceConfig
 import search_of_article.repo.LiquibaseMigrator
 import search_of_article.repo.impl.ArticleRepoImpl
 
 import java.util.concurrent.Executors
 import scala.concurrent.ExecutionContext
-import scala.util.Try
 
 class RepoDI(config: ArticleServiceConfig)(implicit runtime: IORuntime)  {
 

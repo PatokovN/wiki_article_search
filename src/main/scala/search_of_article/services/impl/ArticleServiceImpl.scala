@@ -4,7 +4,6 @@ import cats.implicits._
 import cats.effect._
 import io.circe.{DecodingFailure, Json}
 import io.circe.parser.parse
-import search_of_article.api.enpoints.NotFound
 import search_of_article.model._
 import search_of_article.repo.ArticleRepo
 import search_of_article.services.ArticleService
@@ -18,7 +17,7 @@ import scala.util.{Failure, Success, Try}
 
 class ArticleServiceImpl(repo: ArticleRepo)(implicit ec: ExecutionContext) extends ArticleService {
 
-  override def fillTable(path: String): IO[Unit] =
+  override def parsingOfFile(path: String): IO[Unit] =
     Try {
       val fullJson = Source.fromFile(path)
       val readFile = fullJson.getLines().toList
@@ -32,10 +31,10 @@ class ArticleServiceImpl(repo: ArticleRepo)(implicit ec: ExecutionContext) exten
       )
     } match {
       case Failure(exception) => IO.raiseError(exception)
-      case Success(listOfData) => insertTransaction2(listOfData)
+      case Success(listOfData) => insertTransaction(listOfData)
     }
 
-  private def insertTransaction2(list: List[Either[Throwable, FullArticle]]): IO[Unit] = {
+  private def insertTransaction(list: List[Either[Throwable, FullArticle]]): IO[Unit] = {
     val invalidArtListIO: IO[List[FullArticle]] = list.map(IO.fromEither).sequence
     for {
       invalidArtList <- invalidArtListIO
@@ -53,10 +52,99 @@ class ArticleServiceImpl(repo: ArticleRepo)(implicit ec: ExecutionContext) exten
 
   }
 
+  override def find(title: String): IO[List[FullArticle]] = {
+    for {
+      listPartArticle <- repo.getArticle(title)
+      validateList: IO[List[PartitionArticle]] =
+        if (listPartArticle.isEmpty) articleNotFound(title) else IO.pure(listPartArticle)
+      _ <- validateList
+      listFullArticleIO = listPartArticle.map { partArticle =>
+        for {
+          listOfOpt <- repo.getAuxiliaryText(partArticle.id)
+          optAuxText: Option[List[String]] = convertListOption(listOfOpt)
+          listOfCategoryId <- repo.getCategoryIdByArticleId(partArticle.id)
+          categoryListIO = listOfCategoryId.map(id => repo.getCategoryById(id)).sequence
+          categoryList <- categoryListIO
+        } yield FullArticle(partArticle.id, partArticle.title, partArticle.createTime, partArticle.timestamp,
+          partArticle.language, partArticle.wiki, optAuxText, categoryList)
+      }.sequence
+      listFullArticle <- listFullArticleIO
+    } yield listFullArticle
+  }
+
+
+  override def statisticByCategories: IO[List[CategoryStatistic]] = repo.getCategoryStatistic
+
+  override def update(title: String,
+                      newOptTitle: Option[String],
+                      optCategoryList: Option[List[String]],
+                      optAuxiliaryText: Option[List[String]]): IO[List[FullArticle]] = {
+
+    for {
+      listPartArticle <- repo.getArticle(title)
+      validateList: IO[List[PartitionArticle]] =
+        if (listPartArticle.isEmpty) articleNotFound(title) else IO.pure(listPartArticle)
+      _ <- validateList
+      listFullArticleIO = listPartArticle.map { article =>
+        for {
+          auxText <- optAuxiliaryText
+            .fold(repo.getAuxiliaryText(article.id)
+              .map(l => convertListOption(l)))(elem => IO.pure(Some(elem)))
+          updatedCategoryList <- updateCategoryList(article.id, optCategoryList)
+          fullArticle = FullArticle(
+            id = article.id,
+            title = newOptTitle.getOrElse(article.title),
+            createTime = article.createTime,
+            timestamp = Instant.now(),
+            language = article.language,
+            wiki = article.wiki,
+            auxiliaryText = auxText,
+            categories = updatedCategoryList
+          )
+          _ <- repo.updateArticle(fullArticle)
+        } yield fullArticle
+      }.sequence
+      listFullArticle <- listFullArticleIO
+    } yield listFullArticle
+  }
+
+  // additional implementation - this method search the number of articles for the only one concrete category
+
+  override def counterByCategory(categoryName: String): IO[Int] =
+    for {
+      optCategory <- repo.getCategoryByName(categoryName)
+      category <- optCategory.fold(categoryNotFound(categoryName))(c => IO.pure(c))
+      categoryId = category.id
+      numberOfArticlesByCategory <- repo.getNumberOfArticlesByCategory(categoryId)
+    } yield numberOfArticlesByCategory
+
+
+  private def customParserDataLine(value: Json): Either[DecodingFailure, FullArticle] = {
+    val cursor = value.hcursor
+    for {
+      title <- cursor.downField("title").as[String]
+      createTime <- cursor.downField("create_timestamp").as[Instant]
+      timestamp <- cursor.downField("timestamp").as[Instant]
+      language <- cursor.downField("language").as[String]
+      wiki <- cursor.downField("wiki").as[String]
+      categoryListOpt <- cursor.downField("category").as[List[String]]
+      auxiliaryTextOnly <- cursor.downField("auxiliary_text").as[Option[List[String]]]
+
+      categoryList = if (categoryListOpt.isEmpty) List("") else categoryListOpt
+      auxiliaryTextValidEmpty = auxiliaryTextOnly.map(list => if (list.isEmpty) List("") else list)
+    } yield {
+      val articleId = UUID.randomUUID().toString
+      val categories = categoryList.map(string => Category(UUID.randomUUID().toString, string))
+      FullArticle(articleId, title, createTime, timestamp, language, wiki, auxiliaryTextValidEmpty, categories)
+    }
+  }
+
   private def auxTextRelate(listData: List[DataLine]): List[AuxTextLine] = {
     listData.flatMap(dataLine => {
       dataLine.text match {
-        case Some(textLines) => textLines.map(text => AuxTextLine(dataLine.part.id, Some(text)))
+        case Some(textLines) => {
+          textLines.map(text => AuxTextLine(dataLine.part.id, Some(text)))
+        }
         case None => List(AuxTextLine(dataLine.part.id, None))
       }
     })
@@ -89,81 +177,6 @@ class ArticleServiceImpl(repo: ArticleRepo)(implicit ec: ExecutionContext) exten
     IO.fromFuture(IO(validDataLines))
   }
 
-  private def customParserDataLine(value: Json): Either[DecodingFailure, FullArticle] = {
-    val cursor = value.hcursor
-    for {
-      title <- cursor.downField("title").as[String]
-      createTime <- cursor.downField("create_timestamp").as[Instant]
-      timestamp <- cursor.downField("timestamp").as[Instant]
-      language <- cursor.downField("language").as[String]
-      wiki <- cursor.downField("wiki").as[String]
-      categoryListOpt <- cursor.downField("category").as[List[String]]
-      auxiliaryTextOnly <- cursor.downField("auxiliary_text").as[Option[List[String]]]
-
-      categoryList = if (categoryListOpt.isEmpty) List("") else categoryListOpt
-      auxiliaryTextValidEmpty = auxiliaryTextOnly.map(list => if (list.isEmpty) List("") else list)
-    } yield {
-      val articleId = UUID.randomUUID().toString
-      val categories = categoryList.map(string => Category(UUID.randomUUID().toString, string))
-      FullArticle(articleId, title, createTime, timestamp, language, wiki, auxiliaryTextValidEmpty, categories)
-    }
-  }
-
-  override def find(title: String): IO[List[FullArticle]] = {
-    for {
-      listPartArticle <- repo.getArticle(title)
-      validateList: IO[List[PartitionArticle]] =
-        if (listPartArticle.isEmpty) articleNotFound(title) else IO.pure(listPartArticle)
-      _ <- validateList
-      listFullArticleIO = listPartArticle.map { partArticle =>
-        for {
-          listOfOpt <- repo.getAuxiliaryText(partArticle.id)
-          optAuxText = convertListOption(listOfOpt)
-          listOfCategoryId <- repo.getCategoryIdByArticleId(partArticle.id)
-          categoryListIO = listOfCategoryId.map(id => repo.getCategoryById(id)).sequence
-          categoryList <- categoryListIO
-        } yield FullArticle(partArticle.id, partArticle.title, partArticle.createTime, partArticle.timestamp,
-          partArticle.language, partArticle.wiki, optAuxText, categoryList)
-      }.sequence
-      listFullArticle <- listFullArticleIO
-    } yield listFullArticle
-  }
-
-
-  override def statisticByCategories: IO[List[CategoryStatistic]] = repo.getCategoryStatistic
-
-  override def update(title: String,
-                      newOptTitle: Option[String],
-                      optCategoryList: Option[List[String]],
-                      optAuxiliaryText: Option[List[String]]): IO[List[FullArticle]] = {
-
-    for {
-      listPartArticle <- repo.getArticle(title)
-      validateList: IO[List[PartitionArticle]] =
-        if (listPartArticle.isEmpty) articleNotFound(title) else IO.pure(listPartArticle)
-      _ <- validateList
-      listFullArticleIO = listPartArticle.map { article =>
-        for {
-          auxText <- optAuxiliaryText
-            .fold(repo.getAuxiliaryText(article.id).map(convertListOption))(elem => IO.pure(Some(elem)))
-          updatedCategoryList <- updateCategoryList(article.id, optCategoryList)
-          fullArticle = FullArticle(
-            id = article.id,
-            title = newOptTitle.getOrElse(article.title),
-            createTime = article.createTime,
-            timestamp = Instant.now(),
-            language = article.language,
-            wiki = article.wiki,
-            auxiliaryText = auxText,
-            categories = updatedCategoryList
-          )
-          _ <- repo.updateArticle(fullArticle)
-        } yield fullArticle
-      }.sequence
-      listFullArticle <- listFullArticleIO
-    } yield listFullArticle
-  }
-
   private def updateCategoryList(articleId: String, optCategoryList: Option[List[String]]): IO[List[Category]] = {
 
     def updateBaseForNewListCategory(categoryList: List[String]): IO[List[Category]] = {
@@ -191,39 +204,27 @@ class ArticleServiceImpl(repo: ArticleRepo)(implicit ec: ExecutionContext) exten
     }
 
     optCategoryList match {
-      case Some(newList) => updateBaseForNewListCategory(newList)
+      case Some(newList) => updateBaseForNewListCategory(newList.distinct)
       case None => fetchExistedListCategory(articleId)
     }
   }
 
-  private def convertListOption(list: List[Option[String]]): Option[List[String]] =
-    list match {
-      case Nil => Some(Nil)
-      case h :: t =>
-        val restOfList = convertListOption(t)
-        if (h.isEmpty || restOfList.isEmpty) None else Some(h.get :: restOfList.get)
-    }
-
-
-  private def articleNotFound(title: String): IO[List[PartitionArticle]] = {
-    IO.raiseError[List[PartitionArticle]](NotFound(s"\"$title\" not found!"))
+  @tailrec
+  private def convertListOption(list: List[Option[String]], acc: Option[List[String]] = None): Option[List[String]] = list match {
+    case Nil => acc.map(_.reverse)
+    case h :: t =>
+      h match {
+        case Some(value) => convertListOption(t, Some(value :: acc.getOrElse(Nil)))
+        case None => acc.map(_.reverse)
+      }
   }
 
-  private def categoryNotFound(categoryName: String): IO[Category] = {
-    IO.raiseError[Category](new IllegalArgumentException(s"Categories with name $categoryName not found"))
+
+private def articleNotFound (title: String): IO[List[PartitionArticle]] = {
+  IO.raiseError[List[PartitionArticle]] (new IllegalArgumentException (s"title with name \"$title\" not found!") )
   }
 
-  private def categoryFormingError(exceptionMessage: String): Future[Category] = {
-    Future.failed(new IllegalArgumentException(s"Error at the moment of forming category catalog"))
+  private def categoryNotFound (categoryName: String): IO[Category] = {
+  IO.raiseError[Category] (new IllegalArgumentException (s"Categories with name \"$categoryName\" not found") )
   }
-
-  // additional implementation - this method search the number of articles for the only one concrete category
-
-  override def counterByCategory(categoryName: String): IO[Int] =
-    for {
-      optCategory <- repo.getCategoryByName(categoryName)
-      category <- optCategory.fold(categoryNotFound(categoryName))(c => IO.pure(c))
-      categoryId = category.id
-      numberOfArticlesByCategory <- repo.getNumberOfArticlesByCategory(categoryId)
-    } yield numberOfArticlesByCategory
-}
+  }

@@ -1,7 +1,6 @@
 package search_of_article.model
 
 import java.time.Instant
-import java.util.UUID
 
 case class FullArticle(id: String,
                        title: String,

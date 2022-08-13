@@ -69,10 +69,13 @@ class ArticleRepoImpl(transactor: Transactor[IO])(implicit runtime: IORuntime) e
 
     val insertNewAuxText = fullArticle.auxiliaryText match {
       case None => Fragment.empty
-      case Some(list) => list.map(text =>
-        sql"""insert into auxiliary_text_table (article_id, text)
-           values (${fullArticle.id}, ${text});"""
-      ).reduce(_ ++ _)
+      case Some(list) =>  list match {
+          case Nil => Fragment.empty
+          case noneEmptyList =>  noneEmptyList.map(text =>
+            sql"""insert into auxiliary_text_table (article_id, text)
+           values (${fullArticle.id}, $text);"""
+          ).reduce(_ ++ _)
+        }
     }
 
     val updateArticle =
@@ -108,7 +111,8 @@ class ArticleRepoImpl(transactor: Transactor[IO])(implicit runtime: IORuntime) e
   }
 
   override def getCategoryByName(categoryName: String): IO[Option[Category]] = toIO {
-    sql"select id, category from category_catalog where category = $categoryName".query[Category].option
+    sql"select id, category from category_catalog where lower(category) = lower($categoryName)"
+      .query[Category].option
   }
 
   override def insertArticle(listPartArticle: List[PartitionArticle]): IO[Int] = toIO {

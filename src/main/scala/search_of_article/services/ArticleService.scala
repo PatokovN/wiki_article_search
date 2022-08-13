@@ -6,7 +6,7 @@ import search_of_article.model.{CategoryStatistic, FullArticle}
 
 trait ArticleService {
 
-  def fillTable(path: String): IO[Unit]
+  def parsingOfFile(path: String): IO[Unit]
 
   def find(title: String): IO[List[FullArticle]]
 
