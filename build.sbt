@@ -37,5 +37,6 @@ libraryDependencies ++= Seq(
   "com.softwaremill.sttp.tapir" %% "tapir-swagger-ui-bundle" % tapirVersion,
 
   "ch.qos.logback" % "logback-classic" % "1.1.3" % Runtime,
-  "com.github.pureconfig" %% "pureconfig" % pureConfigVersion
+  "com.github.pureconfig" %% "pureconfig" % pureConfigVersion,
+  "com.github.pureconfig" %% "pureconfig-cats-effect" % pureConfigVersion
 )

@@ -7,8 +7,8 @@ import org.http4s.server.Router
 import search_of_article.config.ArticleServiceConfig
 import search_of_article.di.{ApiDI, RepoDI, ServiceDI}
 import pureconfig._
-import pureconfig.error.ConfigReaderException
 import pureconfig.generic.auto._
+import pureconfig.module.catseffect.syntax.CatsEffectConfigSource
 
 import scala.concurrent.ExecutionContext
 
@@ -19,11 +19,7 @@ object ArticleApp extends IOApp {
 
   override def run(args: List[String]): IO[ExitCode] = {
     for {
-      config <- IO.fromTry(ConfigSource
-        .default
-        .load[ArticleServiceConfig]
-        .left.map(ConfigReaderException[ArticleServiceConfig](_))
-        .toTry)
+      config <- ConfigSource.default.loadF[IO, ArticleServiceConfig]
       repoDI = new RepoDI(config)
       serviceDI = new ServiceDI(repoDI)
       api = new ApiDI(serviceDI)

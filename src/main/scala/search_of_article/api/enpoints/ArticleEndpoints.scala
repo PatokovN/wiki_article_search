@@ -50,10 +50,10 @@ object ArticleEndpoints {
     .in(path[String]("title"))
     .in(query[Option[String]]("new title"))
     .in(query[Option[String]]("list of categories")
-      .description("write list of category here, for delimiter use ';' and don't use spaces")
+      .description("write list of category here, for delimiter use ','")
       .example(Some("category1,category2")))
     .in(query[Option[String]]("auxiliary text")
-      .description("write an auxiliary_text here, for delimiter use '.' and don't use spaces")
+      .description("write an auxiliary_text here, for delimiter use '.'")
       .example(Some("First element of array.Second element of array")))
     .out(jsonBody[List[ArticleView]])
 

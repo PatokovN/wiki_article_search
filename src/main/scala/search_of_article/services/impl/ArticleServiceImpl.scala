@@ -35,10 +35,10 @@ class ArticleServiceImpl(repo: ArticleRepo)(implicit ec: ExecutionContext) exten
     }
 
   private def insertTransaction(list: List[Either[Throwable, FullArticle]]): IO[Unit] = {
-    val invalidArtListIO: IO[List[FullArticle]] = list.map(IO.fromEither).sequence
+    val validArtListIO: IO[List[FullArticle]] = list.filter(_.isRight).map(IO.fromEither).sequence
     for {
-      invalidArtList <- invalidArtListIO
-      validDataListIO = formingCategoryCatalog(invalidArtList)
+      validArtList <- validArtListIO
+      validDataListIO = formingCategoryCatalog(validArtList)
       validDataList <- validDataListIO
       partialArticle = validDataList.map(_.part).distinct
       categories = validDataList.map(_.category).distinct
@@ -169,12 +169,7 @@ class ArticleServiceImpl(repo: ArticleRepo)(implicit ec: ExecutionContext) exten
       }
     }
 
-    val validDataLines: Future[List[DataLine]] =
-      Future {
-        innerFormCategoryCatalog(dataLinesInvalid, Map.empty, List.empty)
-      }
-
-    IO.fromFuture(IO(validDataLines))
+    IO(innerFormCategoryCatalog(dataLinesInvalid, Map.empty, List.empty))
   }
 
   private def updateCategoryList(articleId: String, optCategoryList: Option[List[String]]): IO[List[Category]] = {
