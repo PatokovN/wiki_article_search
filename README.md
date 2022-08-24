@@ -10,7 +10,7 @@
     - user: postgres
     - password: postgres
     - create schema "wiki"
-3) Put your file with json information in folder "src/main/resources/directory_for_data_damp" 
+3) Put your file with json information in folder "src/main/resources/directory_for_data_damp" (download it from:  https://dumps.wikimedia.org/other/cirrussearch/current/ruwikiquote-<ДД.ММ.ГГГГ>-cirrussearch-general.json.gz)
 4) Rename file with json information into "datafile.json"
 5) To run the application go to "src/main/scala/search_of_article/ArticleApp.scala"
 6) After program's run you should wait a bit before in console you will see "http://localhost:8080/docs". Click on this link and test the application
