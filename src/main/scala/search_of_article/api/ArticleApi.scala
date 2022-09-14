@@ -13,67 +13,66 @@ import io.circe.syntax.EncoderOps
 import search_of_article.api.enpoints._
 import search_of_article.model.CategoryStatistic
 
+
 class ArticleApi(articleService: ArticleService) {
+
+  def errorHandler[A](response: IO[A]): IO[Either[CustomError, A]] =
+    response.attempt.map[Either[CustomError, A]] {
+      case Left(notFound: IllegalArgumentException) => NotFound(notFound.getMessage).asLeft[A]
+      case Left(error: Throwable) => ServerError(error.getMessage).asLeft[A]
+      case Right(value) => value.asRight[CustomError]
+  }
+  def errorHandlerList[A](response: IO[List[A]]): IO[Either[CustomError, List[A]]] =
+    response.attempt.map[Either[CustomError, List[A]]] {
+      case Left(notFound: IllegalArgumentException) => NotFound(notFound.getMessage).asLeft[List[A]]
+      case Left(error: Throwable) => ServerError(error.getMessage).asLeft[List[A]]
+      case Right(value) => value.asRight[CustomError]
+  }
 
   val findArticleRoute: HttpRoutes[IO] =
     Http4sServerInterpreter[IO]()
       .toRoutes(ArticleEndpoints.findArticle
-        .serverLogic(title => articleService.find(title._1)
-          .map(data => {
-            val viewList = data.map(ArticleView.fromFullArticle)
-            convertIntoStringOfFormat(viewList, title._2)
-          }).attempt.map[Either[CustomError,String]]{
-          case Left(notFound:IllegalArgumentException) => NotFound(notFound.getMessage).asLeft[String]
-          case Left(error: Throwable) => ServerError(error.getMessage).asLeft[String]
-          case Right(value) => value.asRight[CustomError]
-        })
+        .serverLogic {title =>
+          val response = articleService.find(title._1)
+            .map { data =>
+              val viewList = data.map(ArticleView.fromFullArticle)
+              convertIntoStringOfFormat(viewList, title._2)
+            }
+          errorHandler(response)
+          }
       )
 
   val counterByCategoryRoute: HttpRoutes[IO] =
     Http4sServerInterpreter[IO]()
       .toRoutes(ArticleEndpoints.counterByCategory
         .serverLogic(categoryName =>
-          articleService.counterByCategory(categoryName.getOrElse(""))
-            .map(_.toString).attempt.map[Either[CustomError,String]]{
-            case Left(notFound:IllegalArgumentException) => NotFound(notFound.getMessage).asLeft[String]
-            case Left(error: Throwable) => ServerError(error.getMessage).asLeft[String]
-            case Right(value) => value.asRight[CustomError]
-          })
+          errorHandler(articleService.counterByCategory(categoryName).map(_.toString)))
       )
 
   val categoryStatisticRoute: HttpRoutes[IO] =
     Http4sServerInterpreter[IO]()
       .toRoutes(ArticleEndpoints.categoryStatistic
-        .serverLogic(_ => articleService.statisticByCategories.attempt
-          .map[Either[CustomError,List[CategoryStatistic]]]{
-          case Left(error: Throwable) => ServerError(error.getMessage).asLeft[List[CategoryStatistic]]
-          case Right(value) => value.asRight[CustomError]
-        }))
+        .serverLogic(_ =>
+          errorHandlerList(articleService.statisticByCategories))
+      )
 
   val updateArticleRoute: HttpRoutes[IO] =
     Http4sServerInterpreter[IO]()
       .toRoutes(ArticleEndpoints.updateArticle
-        .serverLogic(request => {
-          val title = request._1
-          val optCategoryList = request._3.map(_.split(",").toList)
-          val optAuxiliaryText = request._4.map(_.split("\\.").toList)
-          articleService
-            .update(title, request._2, optCategoryList, optAuxiliaryText)
-            .map(list => list.map(ArticleView.fromFullArticle))
-        }.attempt.map[Either[CustomError,List[ArticleView]]]{
-          case Left(notFound:IllegalArgumentException) => NotFound(notFound.getMessage).asLeft[List[ArticleView]]
-          case Left(error: Throwable) => ServerError(error.getMessage).asLeft[List[ArticleView]]
-          case Right(value) => value.asRight[CustomError]
-        })
+        .serverLogic(request =>
+          errorHandlerList(articleService
+            .update(request.oldTitle, request.optNewTitle, request.optCategoryList, request.optAuxiliaryText)
+            .map(list => list.map(ArticleView.fromFullArticle)))
+        )
       )
 
   val swaggerUIRoutes: HttpRoutes[IO] = Http4sServerInterpreter[IO]().toRoutes(
     SwaggerInterpreter().fromEndpoints[IO](ArticleEndpoints.listOfEndpoints,
-      "Search_of_article_from_Wikipedia", "1.0.0 ha")
+      "Search_of_article_from_Wikipedia", "1.0.1")
   )
 
   val articleRoutes = findArticleRoute <+> counterByCategoryRoute <+>
-    categoryStatisticRoute <+> updateArticleRoute <+> swaggerUIRoutes
+    categoryStatisticRoute <+> swaggerUIRoutes <+> updateArticleRoute
 
   private def convertIntoStringOfFormat(listArticle: List[ArticleView], prettyFormat: Option[String]): String = {
 

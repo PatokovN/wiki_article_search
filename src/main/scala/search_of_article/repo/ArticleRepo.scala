@@ -3,10 +3,12 @@ package search_of_article.repo
 import cats.effect.IO
 import search_of_article.model._
 
+import java.util.UUID
+
 
 trait ArticleRepo {
 
-  def insertArticle(listPartArticle: List[PartitionArticle]): IO[Int]
+  def insertArticle(listArticle: List[FullArticle]): IO[Unit]
 
   def insertCategoryList(categories: List[Category]): IO[Int]
 
@@ -16,20 +18,24 @@ trait ArticleRepo {
 
   def insertCategory(category: Category): IO[Unit]
 
-  def getAuxiliaryText(articleId: String): IO[List[Option[String]]]
+  def getAuxiliaryText(articleId: UUID): IO[Option[List[String]]]
 
-  def getArticle(title: String): IO[List[PartitionArticle]]
+  def getArticles(title: String): IO[List[PartitionArticle]]
 
-  def getCategoryIdByArticleId(articleId: String): IO[List[String]]
+  def getCategoryListByArticleId(articleId: UUID): IO[List[Category]]
 
-  def getCategoryById(categoryId: String) : IO[Category]
+  def getCategoryCatalog: IO[List[Category]]
+
+  def getCategoryById(categoryId: UUID) : IO[Category]
 
   def getCategoryStatistic: IO[List[CategoryStatistic]]
 
   def updateArticle(fullArticle: FullArticle): IO[Unit]
 
+  def deleteAuxiliaryText(articleId: UUID): IO[Unit]
+
 
   def getCategoryByName(categoryName: String): IO[Option[Category]]
 
-  def getNumberOfArticlesByCategory(categoryId: String): IO[Int]
+  def getNumberOfArticlesByCategory(categoryId: UUID): IO[Int]
 }

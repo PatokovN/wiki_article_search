@@ -18,6 +18,9 @@
         <addPrimaryKey constraintName="article_pk" tableName="articles" columnNames="id"/>
         <addNotNullConstraint constraintName="article_create_time_nn" tableName="articles" columnName="create_time"/>
         <addNotNullConstraint constraintName="article_timestamp_nn" tableName="articles" columnName="timestamp"/>
+        <createIndex indexName="article_index" tableName="articles">
+            <column name="title"/>
+        </createIndex>
     </changeSet>
 
     <changeSet id="create_category_catalog" author="patokov_nikita">
@@ -26,22 +29,28 @@
             <column name="category" type="${text.type}"/>
         </createTable>
         <addPrimaryKey constraintName="category_pk" tableName="category_catalog" columnNames="id"/>
-
+        <addUniqueConstraint constraintName="category_name_u" tableName="category_catalog" columnNames="category"/>
+        <createIndex indexName="category_index" tableName="category_catalog">
+            <column name = "category"/>
+        </createIndex>
     </changeSet>
-
-    <changeSet id="create_full_info" author="patokov_nikita">
-        <createTable tableName="full_info_table">
+    <changeSet id="article_category_relation" author="patokov_nikita">
+        <createTable tableName="article_category_relation">
             <column name="id" type="${serial.type}"/>
             <column name="article_id" type="${uuid.type}"/>
             <column name="category_id" type="${uuid.type}"/>
         </createTable>
-        <addPrimaryKey constraintName="full_info_table_pk" tableName="full_info_table" columnNames="id"/>
+        <addPrimaryKey constraintName="art_category_relation_pk" tableName="article_category_relation" columnNames="id"/>
         <addForeignKeyConstraint constraintName="article_fk"  baseColumnNames="article_id"
-                                 baseTableName="full_info_table" referencedColumnNames="id"
-                                 referencedTableName="articles"/>
+                                 baseTableName="article_category_relation" referencedColumnNames="id"
+        referencedTableName="articles"/>
         <addForeignKeyConstraint constraintName="category_fk"  baseColumnNames="category_id"
-                                 baseTableName="full_info_table" referencedColumnNames="id"
-                                 referencedTableName="category_catalog"/>
+                                 baseTableName="article_category_relation" referencedColumnNames="id"
+        referencedTableName="category_catalog"/>
+        <createIndex indexName="article_relate_index" tableName="article_category_relation" >
+            <column name="article_id"/>
+        </createIndex>
+
     </changeSet>
 
     <changeSet id="create_auxiliary_text_table" author="patokov_nikita">
@@ -54,6 +63,9 @@
         <addForeignKeyConstraint constraintName="aux_text_fk"  baseColumnNames="article_id"
                                  baseTableName="auxiliary_text_table" referencedColumnNames="id"
                                  referencedTableName="articles"/>
+        <createIndex tableName="auxiliary_text_table" indexName="auxiliary_text_index">
+            <column name="article_id"/>
+        </createIndex>
 
     </changeSet>
 

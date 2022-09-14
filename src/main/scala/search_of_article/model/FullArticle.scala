@@ -1,30 +1,20 @@
 package search_of_article.model
 
 import java.time.Instant
+import java.util.UUID
 
-case class FullArticle(id: String,
+
+case class FullArticle(id: UUID,
                        title: String,
                        createTime: Instant,
                        timestamp: Instant,
                        language: String,
                        wiki: String,
                        auxiliaryText: Option[List[String]],
-                        categories: List[Category]
-                      )
+                       categories: List[Category])
 
-case class Category(id: String, name: String)
-
-case class DataLine(part: PartitionArticle,text: Option[List[String]], category: Category)
-
-object DataLine {
-
-  def fromFullArticle(fullArticle: FullArticle): List[DataLine] =
-    for {
-      category <- fullArticle.categories
-    } yield DataLine(PartitionArticle.fromFullArticle(fullArticle), fullArticle.auxiliaryText, category)
-}
-
-case class PartitionArticle(id: String,
+case class Category(categoryId: UUID, name: String)
+case class PartitionArticle(id: UUID,
                             title: String,
                             createTime: Instant,
                             timestamp: Instant,
@@ -32,13 +22,6 @@ case class PartitionArticle(id: String,
                             wiki: String
                            )
 
-object PartitionArticle {
+case class AuxTextLine(articleId: UUID, text: String)
 
-  def fromFullArticle(fullArticle: FullArticle): PartitionArticle =
-    PartitionArticle(fullArticle.id, fullArticle.title, fullArticle.createTime, fullArticle.timestamp,
-      fullArticle.language, fullArticle.wiki)
-}
-
-case class AuxTextLine(articleId: String, text: Option[String])
-
-case class RelationArticleCategory(articleId: String, categoryId: String)
+case class RelationArticleCategory(articleId: UUID, categoryId: UUID)
